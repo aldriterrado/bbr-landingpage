@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import hero from '../../assets/hero.jpg'
 import hero2 from '../../assets/hero3.jpg'
 
 export const Section1: React.FC = () => {
@@ -77,8 +76,8 @@ export const Section1: React.FC = () => {
             <div className={`mb-12 relative transition-all duration-1000 delay-300 ${isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
               <div className="absolute -top-10 -left-6 w-20 h-20 border-l-2 border-t-2 border-white/30 opacity-60"></div>
               <div className="flex flex-col items-start">
-                <div className={`inline-flex items-center space-x-2 mb-3 bg-gradient-to-r from-white/20 to-transparent px-4 py-1.5 rounded-full transition-all duration-700 delay-500 ${isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-                  <div className="w-2 h-2 rounded-full bg-white animate-pulse-subtle"></div>
+                <div className={`inline-flex items-center space-x-2 mb-3 bg-gradient-to-r from-white/20 to-transparent px-4 py-1.5 transition-all duration-700 delay-500 ${isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+                  <div className="w-2 h-2 bg-white animate-pulse-subtle"></div>
                   <span className="text-xs font-medium uppercase tracking-wider text-white">
                     Singapore
                   </span>
@@ -122,8 +121,8 @@ export const Section1: React.FC = () => {
           <span className="mb-2 text-xs font-light uppercase tracking-widest text-white/70 transition-all duration-300 group-hover:text-white">
             Scroll to explore
           </span>
-          <div className="relative h-8 w-5 overflow-hidden rounded-full border border-white/30 p-1 transition-all duration-300 group-hover:border-white/70">
-            <div className="h-1 w-1 rounded-full bg-white/70 transition-all duration-300 group-hover:bg-white animate-scroll-bounce"></div>
+          <div className="relative h-8 w-5 overflow-hidden border border-white/30 p-1 transition-all duration-300 group-hover:border-white/70">
+            <div className="h-1 w-1 bg-white/70 transition-all duration-300 group-hover:bg-white animate-scroll-bounce"></div>
           </div>
         </div>
       </div>

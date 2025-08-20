@@ -4,13 +4,11 @@ import bbrgt from "../../assets/projects/bbrgt/BBRHQ.jpg";
 export const Section5: React.FC = () => {
   const [activeProject, setActiveProject] = useState(0);
   const [isInView, setIsInView] = useState(false);
-  const [headerProgress, setHeaderProgress] = useState(0);
   
   const sectionRef = useRef<HTMLDivElement>(null);
   const headerSectionRef = useRef<HTMLDivElement>(null);
   const projectsContainerRef = useRef<HTMLDivElement>(null);
   const projectRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Reduced to 5 projects as requested
   const projects = [
@@ -77,10 +75,16 @@ export const Section5: React.FC = () => {
         if (entry.isIntersecting) {
           setIsInView(true);
         } else {
-          setIsInView(false);
+          // Only set to false if we're significantly out of view
+          if (entry.intersectionRatio < 0.05) {
+            setIsInView(false);
+          }
         }
       },
-      { threshold: 0.1 }
+      {
+        threshold: [0, 0.05, 0.1, 0.2],
+        rootMargin: '0px 0px -10% 0px'
+      }
     );
 
     if (sectionRef.current) {
@@ -97,88 +101,133 @@ export const Section5: React.FC = () => {
   // Initialize project refs array
   useEffect(() => {
     projectRefs.current = projectRefs.current.slice(0, projects.length);
+
+    // Set initial visibility to true to ensure header appears
+    setIsInView(true);
   }, [projects.length]);
+
+
 
   // Contained scroll effect - only within this section
   const [scrollY, setScrollY] = useState(0);
-  const [isScrolling, setIsScrolling] = useState(false);
-  const [scrollDirection, setScrollDirection] = useState<'up' | 'down'>('down');
-  const [scrollVelocity, setScrollVelocity] = useState(0);
-  const [lastScrollY, setLastScrollY] = useState(0);
-  const [scrollTimeout, setScrollTimeout] = useState<number | null>(null);
 
-  // Handle scroll within the projects container only
-  const handleProjectsScroll = useCallback(() => {
-    if (!projectsContainerRef.current) return;
+  // Handle page scroll for general scroll tracking
+  const handlePageScroll = useCallback(() => {
+    const scrollY = window.scrollY;
+    setScrollY(scrollY);
+  }, []);
 
-    const container = projectsContainerRef.current;
-    const scrollTop = container.scrollTop;
-    const containerHeight = container.clientHeight;
-    const scrollHeight = container.scrollHeight;
-    
-    // Calculate scroll progress within the container
-    const scrollProgress = scrollTop / (scrollHeight - containerHeight);
-    
-    // Calculate which project should be active based on scroll position
-    const projectHeight = scrollHeight / projects.length;
-    const activeIndex = Math.min(
-      projects.length - 1,
-      Math.floor(scrollTop / projectHeight)
-    );
-    
-    setActiveProject(activeIndex);
-    
-    // Calculate header progress (fade out header as projects scroll in)
-    const headerProgressRaw = Math.min(1, scrollTop / (containerHeight * 0.5));
-    setHeaderProgress(headerProgressRaw);
-    
-    // Scroll direction and velocity calculation
-    const direction = scrollTop > lastScrollY ? 'down' : 'up';
-    const velocity = Math.abs(scrollTop - lastScrollY);
-    
-    setScrollDirection(direction);
-    setScrollVelocity(velocity);
-    setScrollY(scrollTop);
-    setLastScrollY(scrollTop);
-    setIsScrolling(true);
-
-    // Clear existing timeout
-    if (scrollTimeout) {
-      clearTimeout(scrollTimeout);
-    }
-
-    // Set new timeout to mark scrolling as stopped
-    const newTimeout = setTimeout(() => {
-      setIsScrolling(false);
-    }, 150);
-
-    setScrollTimeout(newTimeout);
-  }, [lastScrollY, projects.length, scrollTimeout]);
-
-  // Add scroll event listener to projects container
+    // Add window scroll event listener and intersection observers
   useEffect(() => {
-    const container = projectsContainerRef.current;
-    if (container) {
-      container.addEventListener('scroll', handleProjectsScroll, { passive: true });
-      return () => {
-        container.removeEventListener('scroll', handleProjectsScroll);
-        if (scrollTimeout) {
-          clearTimeout(scrollTimeout);
-        }
-      };
-    }
-  }, [handleProjectsScroll, scrollTimeout]);
+    // Debounced scroll handler for header progress
+    let scrollTimeout: number;
+    const handleScroll = () => {
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        handlePageScroll();
+      }, 16); // ~60fps
+    };
 
-  // Smooth scroll to project function within container
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    // Single intersection observer for all projects with better alignment
+    let currentActiveIndex = -1;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Simple viewport center calculation without header dependency
+        const windowHeight = window.innerHeight;
+        const effectiveViewportCenter = windowHeight / 2;
+
+        let bestEntry: IntersectionObserverEntry | null = null;
+        let bestScore = -1;
+
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && entry.intersectionRatio > 0.1) {
+            // Calculate distance from viewport center for alignment
+            const rect = entry.target.getBoundingClientRect();
+            const elementCenter = rect.top + rect.height / 2;
+            const distanceFromCenter = Math.abs(elementCenter - effectiveViewportCenter);
+
+            // Calculate score based on intersection ratio and distance from center
+            const distanceScore = Math.max(0, 1 - (distanceFromCenter / (windowHeight / 2)));
+            const score = (entry.intersectionRatio * 0.7) + (distanceScore * 0.3);
+
+            // Find the entry with the best score
+            if (score > bestScore) {
+              bestScore = score;
+              bestEntry = entry;
+            }
+          }
+        });
+
+        // Set active project based on the best score
+        if (bestEntry) {
+          const index = projectRefs.current.findIndex(ref => ref === bestEntry!.target);
+
+          // Only activate projects if user has scrolled past the header
+          // Check if the projects container is actually in view
+          const containerRect = projectsContainerRef.current?.getBoundingClientRect();
+          const isPastHeader = containerRect && containerRect.top <= window.innerHeight * 0.3;
+
+          if (index !== -1 && (currentActiveIndex === -1 || bestScore > 0.2) && isPastHeader) {
+            currentActiveIndex = index;
+            setActiveProject(index);
+          } else if (!isPastHeader && currentActiveIndex !== -1 && containerRect && containerRect.top > window.innerHeight * 0.4) {
+            // Reset to no active project when back in header area
+            currentActiveIndex = -1;
+            setActiveProject(-1);
+          }
+        }
+      },
+      {
+        threshold: [0.1, 0.3, 0.5, 0.7, 0.9], // Optimized thresholds for better performance
+        rootMargin: '-15% 0px -15% 0px' // Better alignment margin for first project
+      }
+    );
+
+    // Observe all project elements
+    projectRefs.current.forEach((ref) => {
+      if (ref) {
+        observer.observe(ref);
+      }
+    });
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      clearTimeout(scrollTimeout);
+      observer.disconnect();
+    };
+  }, [handlePageScroll, projects.length]);
+
+  // Debug: Log state changes
+  useEffect(() => {
+    console.log('Section5 state:', {
+      activeProject,
+      scrollY
+    });
+  }, [activeProject, scrollY]);
+
+  // Smooth scroll to project function using window scroll
   const scrollToProject = useCallback((index: number) => {
-    if (!projectsContainerRef.current) return;
-    
-    const container = projectsContainerRef.current;
-    const containerHeight = container.clientHeight;
-    const projectHeight = containerHeight;
-    const targetScroll = index * projectHeight;
-    
-    container.scrollTo({
+    const projectElement = projectRefs.current[index];
+    if (!projectElement) return;
+
+    const elementTop = projectElement.offsetTop;
+    const windowHeight = window.innerHeight;
+    const elementHeight = projectElement.offsetHeight;
+
+    // For the first project, account for header space and margin
+    let targetScroll;
+    if (index === 0) {
+      // Position first project with some space from the top to account for header and margin
+      targetScroll = elementTop - windowHeight * 0.25;
+    } else {
+      // Center other projects in the viewport
+      targetScroll = elementTop - (windowHeight - elementHeight) / 2;
+    }
+
+    window.scrollTo({
       top: targetScroll,
       behavior: 'smooth'
     });
@@ -230,9 +279,9 @@ export const Section5: React.FC = () => {
         ref={headerSectionRef}
         className="min-h-screen w-full flex items-center justify-center z-10 relative"
         style={{
-          opacity: 1 - headerProgress * 1.5,
-          transform: `translateY(${headerProgress * 20}vh)`,
-          transition: "opacity 0.3s ease-out, transform 0.3s ease-out",
+          zIndex: 10,
+          opacity: 1,
+          transform: 'translateY(0)',
         }}
       >
         {/* Building background for main header */}
@@ -312,10 +361,10 @@ export const Section5: React.FC = () => {
 
       {/* Scroll progress indicator - Only visible after header is scrolled past */}
       <div
-        className="fixed top-1/2 right-8 z-20 transform -translate-y-1/2 hidden md:block"
+        className="fixed top-1/2 right-4 z-30 transform -translate-y-1/2 hidden sm:block"
         style={{
-          opacity: headerProgress > 0.5 ? Math.min(1, (headerProgress - 0.5) * 2) : 0,
-          transition: "opacity 0.5s ease-out",
+          opacity: (isInView && activeProject >= 0) ? 1 : 0,
+          transition: "opacity 0.3s ease-out",
         }}
       >
         <div className="flex flex-col items-center space-y-3">
@@ -356,20 +405,22 @@ export const Section5: React.FC = () => {
         </div>
       </div>
 
-      {/* Project showcase with contained scroll effect */}
+      {/* Project showcase with normal page scroll */}
       <div
         ref={projectsContainerRef}
-        className="relative z-10 w-full h-screen overflow-y-auto project-scroll-container"
+        className="relative w-full"
         style={{
-          opacity: headerProgress > 0.7 ? Math.min(1, (headerProgress - 0.7) * 3) : 0,
-          pointerEvents: headerProgress > 0.7 ? "all" : "none",
-          transition: "opacity 0.5s ease-out",
+          zIndex: 20,
+          opacity: 1,
+          pointerEvents: "all",
+          transition: "opacity 0.3s ease-out",
         }}
       >
+
+        
         {projects.map((project, index) => {
           const isActive = activeProject === index;
-          const isVisible = Math.abs(activeProject - index) <= 1;
-          
+
           return (
             <div
               key={project.id}
@@ -378,12 +429,12 @@ export const Section5: React.FC = () => {
                   projectRefs.current[index] = el;
                 }
               }}
-              className="w-full h-screen flex items-center justify-center relative project-item"
+              className="w-full min-h-screen flex items-center justify-center relative project-item"
               style={{
-                opacity: isVisible ? 1 : 0,
-                transform: `translateY(${isActive ? 0 : (activeProject > index ? -50 : 50)}px)`,
-                transition: `all 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)`,
-                filter: isActive ? 'none' : 'blur(2px)',
+                opacity: isActive ? 1 : 0.8,
+                transform: `scale(${isActive ? 1 : 0.95})`,
+                transition: `opacity 0.3s ease-out, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), filter 0.4s cubic-bezier(0.4, 0, 0.2, 1)`,
+                filter: isActive ? 'none' : 'blur(1px)',
               }}
             >
               {/* Project image overlay background */}
@@ -393,7 +444,7 @@ export const Section5: React.FC = () => {
                   alt={`${project.title} background`}
                   className="h-full w-full object-cover object-center"
                   style={{
-                    opacity: 0.15,
+                    opacity: 1,
                     filter: 'brightness(0.3) contrast(1.2)',
                   }}
                 />
@@ -401,17 +452,17 @@ export const Section5: React.FC = () => {
                 <div className="absolute inset-0 bg-gradient-to-b from-[#001429]/70 via-[#001429]/50 to-[#001429]/70"></div>
               </div>
 
-              <div className="container mx-auto px-4 md:px-8 h-full flex items-center relative z-10">
-                <div className="w-full flex flex-col md:flex-row items-center overflow-hidden">
+              <div className="container mx-auto px-4 sm:px-6 md:px-8 h-full flex items-center relative z-10">
+                <div className="w-full flex flex-col lg:flex-row items-center overflow-hidden">
                   {/* Project image with enhanced effects */}
                   <div
                     className="relative w-full md:w-3/5 h-[300px] md:h-[500px] overflow-hidden"
                     style={{
                       transform: `scale(${isActive ? 1 : 0.95})`,
-                      transition: "transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+                      transition: "transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
                     }}
                   >
-                    <div className="absolute inset-0 transition-all duration-700">
+                    <div className="absolute inset-0 transition-all duration-500 ease-out">
                       <img
                         src={project.image}
                         alt={project.title}
@@ -419,14 +470,14 @@ export const Section5: React.FC = () => {
                         style={{
                           filter: isActive ? 'brightness(1)' : 'brightness(0.7)',
                           transform: isActive ? 'scale(1.05)' : 'scale(1)',
-                          transition: 'all 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                          transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
                         }}
                       />
                       <div
                         className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-transparent"
                         style={{
                           opacity: isActive ? 0.3 : 0.7,
-                          transition: 'opacity 0.6s ease-out',
+                          transition: 'opacity 0.3s ease-out',
                         }}
                       ></div>
                     </div>
@@ -437,11 +488,11 @@ export const Section5: React.FC = () => {
                       style={{
                         transform: `translateY(${isActive ? 0 : 30}px)`,
                         opacity: isActive ? 0.2 : 0,
-                        transition: 'all 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                        transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
                       }}
                     >
                       <div
-                        className="text-[120px] md:text-[180px] font-bold leading-none"
+                        className="text-[80px] sm:text-[120px] lg:text-[180px] font-bold leading-none"
                         style={{ color: project.color }}
                       >
                         {(index + 1).toString().padStart(2, "0")}
@@ -451,11 +502,11 @@ export const Section5: React.FC = () => {
 
                   {/* Project details with enhanced animations */}
                   <div
-                    className="relative w-full md:w-2/5 h-auto md:h-[500px] bg-black/80 backdrop-blur-sm p-8 md:p-12 flex flex-col justify-center"
+                    className="relative w-full lg:w-2/5 h-auto lg:h-[500px] bg-black/80 backdrop-blur-sm p-6 sm:p-8 lg:p-12 flex flex-col justify-center mt-6 lg:mt-0"
                     style={{
                       transform: `translateX(${isActive ? 0 : 100}px)`,
                       opacity: isActive ? 1 : 0,
-                      transition: "transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.1s, opacity 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.1s",
+                      transition: "transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.05s, opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.05s",
                     }}
                   >
                     <div className="max-w-md">
@@ -465,7 +516,7 @@ export const Section5: React.FC = () => {
                           style={{
                             transform: `translateY(${isActive ? 0 : 20}px)`,
                             opacity: isActive ? 1 : 0,
-                            transition: "transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.2s, opacity 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.2s",
+                            transition: "transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.1s, opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.1s",
                           }}
                         >
                           <div
@@ -473,7 +524,7 @@ export const Section5: React.FC = () => {
                             style={{
                               backgroundColor: project.color,
                               width: isActive ? "2rem" : "0rem",
-                              transition: "width 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.3s",
+                              transition: "width 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.15s",
                             }}
                           ></div>
                           <span className="text-sm font-medium uppercase tracking-wider text-white/70">
@@ -482,11 +533,11 @@ export const Section5: React.FC = () => {
                         </div>
 
                         <h3
-                          className="text-3xl md:text-4xl font-bold text-white mb-2"
+                          className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-2"
                           style={{
                             transform: `translateY(${isActive ? 0 : 30}px)`,
                             opacity: isActive ? 1 : 0,
-                            transition: "transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.3s, opacity 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.3s",
+                            transition: "transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s, opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s",
                           }}
                         >
                           {project.title}
@@ -497,18 +548,18 @@ export const Section5: React.FC = () => {
                           style={{
                             transform: `translateY(${isActive ? 0 : 40}px)`,
                             opacity: isActive ? 1 : 0,
-                            transition: "transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.4s, opacity 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.4s",
+                            transition: "transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.25s, opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.25s",
                           }}
                         >
                           Completed in {project.year}
                         </div>
 
                         <p
-                          className="text-white/70 text-base md:text-lg mb-8"
+                          className="text-white/70 text-sm sm:text-base lg:text-lg mb-6 sm:mb-8"
                           style={{
                             transform: `translateY(${isActive ? 0 : 50}px)`,
                             opacity: isActive ? 1 : 0,
-                            transition: "transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.5s, opacity 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.5s",
+                            transition: "transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.3s, opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.3s",
                           }}
                         >
                           {project.description}
@@ -522,7 +573,7 @@ export const Section5: React.FC = () => {
                             borderWidth: "1px",
                             transform: `translateY(${isActive ? 0 : 60}px)`,
                             opacity: isActive ? 1 : 0,
-                            transition: "transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.6s, opacity 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.6s",
+                            transition: "transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.35s, opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.35s",
                           }}
                         >
                           <span className="relative z-10 flex items-center">
@@ -588,35 +639,13 @@ export const Section5: React.FC = () => {
           animation: scroll-bounce 2s ease-in-out infinite; 
         }
         
-        /* Project scroll container optimizations */
-        .project-scroll-container {
-          scroll-behavior: smooth;
-          scroll-snap-type: y proximity;
-        }
-        
-        .project-item {
-          scroll-snap-align: start;
-          scroll-snap-stop: always;
-        }
-        
-        /* Hide scrollbar for cleaner look */
-        .project-scroll-container::-webkit-scrollbar {
-          width: 6px;
-          background: rgba(255, 255, 255, 0.1);
-        }
-        
-        .project-scroll-container::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.3);
-          border-radius: 3px;
-        }
-        
-        .project-scroll-container::-webkit-scrollbar-track {
-          background: rgba(255, 255, 255, 0.05);
-        }
-        
         /* Smooth scrolling for the entire page */
         html {
           scroll-behavior: smooth;
+        }
+
+        .project-item {
+          min-height: 100vh;
         }
       `}</style>
     </div>

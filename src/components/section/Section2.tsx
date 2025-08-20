@@ -114,7 +114,7 @@ export const Section2: React.FC = () => {
              >
 
               {/* Section label with animated dot */}
-              <div className="inline-flex items-center space-x-2 mb-6 bg-[#003D7D]/10 px-4 py-1.5 rounded-full border border-[#003D7D]/20">
+              <div className="inline-flex items-center space-x-2 mb-6 bg-[#003D7D]/10 px-4 py-1.5 border border-[#003D7D]/20">
                 <div className="w-2 h-2 rounded-full bg-[#003D7D] animate-pulse-slow"></div>
                 <span className="text-xs font-semibold uppercase tracking-wider text-[#003D7D]">
                   About Us

@@ -147,13 +147,11 @@ export const Navbar: React.FC<NavbarProps> = ({
     <nav
       className={`fixed left-0 right-0 top-0 z-50 transition-all duration-300 ${scrolled ? 'bg-black/50 shadow-md backdrop-blur-lg' : 'bg-transparent'}`}
     >
-      <div className="mx-auto flex h-20 w-full items-center justify-between px-6 lg:px-8">
+      <div className="mx-auto flex h-20  items-center justify-between px-6 lg:px-8">
         {/* Logo */}
         <div className="flex items-center">
           <div className="relative">
-            <h1 className="relative text-2xl font-bold tracking-widest text-white">
-              <img src={logo} alt="BBR" className="h-15 w-15" />
-            </h1>
+              <img src={logo} alt="BBR" className="h-10 w-10" />
           </div>
         </div>
         {/* Navigation Links */}

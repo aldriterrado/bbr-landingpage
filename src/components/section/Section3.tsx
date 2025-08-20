@@ -4,7 +4,6 @@ import greentech from '../../assets/greentech.jpg'
 export const Section3: React.FC = () => {
   const [activeSegment, setActiveSegment] = useState<number>(0)
   const [isInView, setIsInView] = useState(false)
-  const [hoveredCard, setHoveredCard] = useState<number | null>(null)
   
   const sectionRef = useRef<HTMLDivElement>(null)
   const segmentsRef = useRef<HTMLDivElement>(null)
@@ -180,11 +179,11 @@ export const Section3: React.FC = () => {
               isInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
             }`}
           >
-            <div className="w-2 h-2 bg-[#60A5FA] animate-pulse-slow" />
+            <div className="w-2 h-2 bg-[#60A5FA] animate-pulse-slow"></div>
             <span className="text-sm font-semibold uppercase tracking-wider text-[#60A5FA]">
               Our Expertise
             </span>
-            <div className="w-2 h-2 bg-[#3B82F6] animate-pulse-slow" style={{ animationDelay: '1s' }} />
+            <div className="w-2 h-2 bg-[#3B82F6] animate-pulse-slow" style={{ animationDelay: '1s' }}></div>
           </div>
           
           <h2
